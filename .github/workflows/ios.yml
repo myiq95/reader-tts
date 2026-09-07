@@ -1,0 +1,55 @@
+
+name: Build IPA for SideStore
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Generate project
+        run: |
+          cat > project.yml <<'YML'
+          name: BookReaderTTS
+          options:
+            bundleIdPrefix: com.bookreader
+          targets:
+            BookReaderTTS:
+              type: application
+              platform: iOS
+              deploymentTarget: "16.0"
+              sources: [BookReaderTTS]
+              info:
+                path: BookReaderTTS/Info.plist
+                properties:
+                  UIBackgroundModes: [audio]
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.bookreader.tts
+                  CODE_SIGNING_ALLOWED: NO
+          YML
+          xcodegen generate
+      - name: Build IPA
+        run: |
+          mkdir -p build
+          xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES || true
+          APP=$(find build/DerivedData -name "*.app" | head -1)
+          echo $APP
+          mkdir -p Payload
+          cp -r "$APP" Payload/
+          zip -r BookReaderTTS-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BookReaderTTS-IPA
+          path: BookReaderTTS-unsigned.ipa
+      - if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BookReaderTTS-unsigned.ipa
+          tag_name: build-${{ github.run_number }}
