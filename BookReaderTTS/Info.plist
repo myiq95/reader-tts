@@ -7,7 +7,6 @@
   <key>CFBundleIdentifier</key><string>com.yourname.bookreadertts</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleShortVersionString</key><string>4.1</string>
-  <key>CFBundleExecutable</key><string>BookReaderTTS</string>
   <key>LSRequiresIPhoneOS</key><true/>
   <key>UILaunchStoryboardName</key><string>LaunchScreen</string>
   <key>UIBackgroundModes</key><array><string>audio</string></array>
