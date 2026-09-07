@@ -9,47 +9,40 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+      - name: Select Xcode 15.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
       - name: Install xcodegen
         run: brew install xcodegen
-      - name: Generate project
+      - name: Generate Xcode Project (compat Xcode 14)
         run: |
-          cat > project.yml <<'YML'
-          name: BookReaderTTS
-          options:
-            bundleIdPrefix: com.bookreader
-          targets:
-            BookReaderTTS:
-              type: application
-              platform: iOS
-              deploymentTarget: "16.0"
-              sources: [BookReaderTTS]
-              info:
-                path: BookReaderTTS/Info.plist
-                properties:
-                  UIBackgroundModes: [audio]
-              settings:
-                base:
-                  PRODUCT_BUNDLE_IDENTIFIER: com.bookreader.tts
-                  CODE_SIGNING_ALLOWED: NO
-          YML
-          xcodegen generate
-      - name: Build IPA
+          cat project.yml
+          xcodegen generate --spec project.yml
+          # force objectVersion 56 (Xcode 14 compatible) if xcodegen used 77
+          sed -i '' 's/objectVersion = 77/objectVersion = 56/g' BookReaderTTS.xcodeproj/project.pbxproj || sed -i 's/objectVersion = 77/objectVersion = 56/g' BookReaderTTS.xcodeproj/project.pbxproj
+          cat BookReaderTTS.xcodeproj/project.pbxproj | head -20
+      - name: Build IPA (unsigned)
         run: |
           mkdir -p build
-          xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES || true
-          APP=$(find build/DerivedData -name "*.app" | head -1)
-          echo $APP
+          xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES -skipPackagePluginValidation || true
+          find build -name "*.app" -type d
+          APP=$(find build/DerivedData -name "*.app" -type d | head -1)
+          if [ -z "$APP" ]; then echo "APP not found"; exit 1; fi
+          echo "Found APP: $APP"
           mkdir -p Payload
-          cp -r "$APP" Payload/
+          cp -R "$APP" Payload/
           zip -r BookReaderTTS-unsigned.ipa Payload
-      - uses: actions/upload-artifact@v4
+          ls -lh *.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
         with:
           name: BookReaderTTS-IPA
           path: BookReaderTTS-unsigned.ipa
-      - if: github.ref == 'refs/heads/main'
+      - name: Release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           files: BookReaderTTS-unsigned.ipa
           tag_name: build-${{ github.run_number }}
+          name: "BookReaderTTS v4.2 - All Formats + LockScreen"
