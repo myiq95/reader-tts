@@ -9,7 +9,6 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     @Published var currentRange: NSRange?
     @Published var rate: Float = 0.50
     @Published var voiceLang = "ko-KR"
-    @Published var currentChapter = ""
     var fullText = ""
     var currentChapterIndex = 0
     private var chunkBaseOffset = 0
@@ -18,10 +17,18 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         super.init()
         synth.delegate = self
         setupAudio()
+        setupRemote()
     }
     func setupAudio(){
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
+    }
+    func setupRemote(){
+        let c = MPRemoteCommandCenter.shared()
+        c.playCommand.addTarget { _ in self.resume(); return .success }
+        c.pauseCommand.addTarget { _ in self.pause(); return .success }
+        c.nextTrackCommand.addTarget { _ in self.nextChapter(); return .success }
+        c.previousTrackCommand.addTarget { _ in self.prevChapter(); return .success }
     }
     func updateNowPlaying(title: String, chapter: String){
         MPNowPlayingInfoCenter.default().nowPlayingInfo = [
@@ -33,11 +40,11 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     func speakFull(_ full: String, title: String){
         fullText = full
         chunkBaseOffset = 0
-        currentChapter = "전체"
         synth.stopSpeaking(at: .immediate)
         let u = AVSpeechUtterance(string: full)
         u.voice = AVSpeechSynthesisVoice(language: voiceLang) ?? AVSpeechSynthesisVoice(language: "ko-KR")
         u.rate = rate
+        u.pitchMultiplier = 1.05
         updateNowPlaying(title: title, chapter: "전체")
         synth.speak(u)
         isSpeaking = true
@@ -58,11 +65,11 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         chunkBaseOffset = accumulated
         let chunkLines = lines[safeStart..<safeEnd].joined(separator: "\n")
         let chunk = chunkLines.isEmpty ? fullText : chunkLines
-        currentChapter = chapters[index].title
         synth.stopSpeaking(at: .immediate)
         let u = AVSpeechUtterance(string: chunk)
         u.voice = AVSpeechSynthesisVoice(language: voiceLang) ?? AVSpeechSynthesisVoice(language: "ko-KR")
         u.rate = rate
+        u.pitchMultiplier = 1.05
         updateNowPlaying(title: fileName, chapter: chapters[index].title)
         synth.speak(u)
         isSpeaking = true
@@ -72,6 +79,7 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     func stop(){ synth.stopSpeaking(at: .immediate); isSpeaking = false; currentRange = nil }
     func nextChapter(){ NotificationCenter.default.post(name: .nextChapter, object: nil) }
     func prevChapter(){ NotificationCenter.default.post(name: .prevChapter, object: nil) }
+    
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString range: NSRange, utterance: AVSpeechUtterance){
         DispatchQueue.main.async {
             let global = NSRange(location: self.chunkBaseOffset + range.location, length: range.length)
