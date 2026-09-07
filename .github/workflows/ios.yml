@@ -12,9 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app; xcodebuild -version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
       - name: Install xcodegen
         run: brew install xcodegen
+      - name: Clean duplicates
+        run: rm -f BookReaderTTS/*_1.swift BookReaderTTS/*-With* BookReaderTTS/TTSManager-GlobalOffset.swift BookReaderTTS/ContentView-With* BookReaderTTS/ContentView-Fixed* BookReaderTTS/ContentView-Final* && ls -lh BookReaderTTS/
       - name: Generate Project
         run: |
           xcodegen generate --spec project.yml
@@ -23,16 +25,14 @@ jobs:
         run: |
           mkdir -p build
           xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -skipPackagePluginValidation
-          ls -lh build/DerivedData/Build/Products/Release-iphoneos/BookReaderTTS.app/
       - name: Create IPA
         run: |
           APP=build/DerivedData/Build/Products/Release-iphoneos/BookReaderTTS.app
-          rm -rf $APP/_CodeSignature $APP/embedded.mobileprovision
+          rm -rf $APP/_CodeSignature
           chmod +x $APP/BookReaderTTS
           rm -rf Payload; mkdir Payload; cp -R $APP Payload/
-          zip -r BookReaderTTS-4.2.1-fixed.ipa Payload -x "*.DS_Store"
-          ls -lh *.ipa
+          zip -r BookReaderTTS-4.3-fixed.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: BookReaderTTS-IPA-fixed
-          path: BookReaderTTS-4.2.1-fixed.ipa
+          name: BookReaderTTS-IPA
+          path: BookReaderTTS-4.3-fixed.ipa
