@@ -1,2 +1,0 @@
-
-// Minimal pbxproj - Xcode will regenerate
