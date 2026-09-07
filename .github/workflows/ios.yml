@@ -9,39 +9,30 @@ permissions:
 jobs:
   build:
     runs-on: macos-14
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode 15.4
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app; xcodebuild -version
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Generate Project
         run: |
           xcodegen generate --spec project.yml
-          sed -i '' 's/objectVersion = 77/objectVersion = 56/g' BookReaderTTS.xcodeproj/project.pbxproj || sed -i 's/objectVersion = 77/objectVersion = 56/g' BookReaderTTS.xcodeproj/project.pbxproj
+          sed -i '' 's/objectVersion = 77/objectVersion = 56/g' BookReaderTTS.xcodeproj/project.pbxproj
       - name: Build .app
         run: |
           mkdir -p build
           xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -skipPackagePluginValidation
-      - name: Create IPA for SideStore
+          ls -lh build/DerivedData/Build/Products/Release-iphoneos/BookReaderTTS.app/
+      - name: Create IPA
         run: |
-          set -x
-          APP=$(find build/DerivedData -name "*.app" -type d | head -1)
-          echo "APP: $APP"
-          ls -lh "$APP"
-          rm -rf "$APP/_CodeSignature"
-          EXEC="BookReaderTTS"
-          echo "Using EXEC=$EXEC"
-          chmod +x "$APP/$EXEC"
-          ls -lh "$APP/$EXEC"
-          rm -rf Payload
-          mkdir Payload
-          cp -R "$APP" Payload/
-          zip -r BookReaderTTS-unsigned.ipa Payload -x "*.DS_Store"
+          APP=build/DerivedData/Build/Products/Release-iphoneos/BookReaderTTS.app
+          rm -rf $APP/_CodeSignature $APP/embedded.mobileprovision
+          chmod +x $APP/BookReaderTTS
+          rm -rf Payload; mkdir Payload; cp -R $APP Payload/
+          zip -r BookReaderTTS-4.2.1-fixed.ipa Payload -x "*.DS_Store"
           ls -lh *.ipa
       - uses: actions/upload-artifact@v4
         with:
-          name: BookReaderTTS-IPA
-          path: BookReaderTTS-unsigned.ipa
+          name: BookReaderTTS-IPA-fixed
+          path: BookReaderTTS-4.2.1-fixed.ipa
