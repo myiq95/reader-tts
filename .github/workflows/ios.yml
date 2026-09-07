@@ -27,15 +27,19 @@ jobs:
           xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -skipPackagePluginValidation
       - name: Create IPA for SideStore
         run: |
+          set -x
           APP=$(find build/DerivedData -name "*.app" -type d | head -1)
           echo "APP: $APP"
+          ls -lh "$APP"
           rm -rf "$APP/_CodeSignature"
-          EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Info.plist")
+          EXEC="BookReaderTTS"
+          echo "Using EXEC=$EXEC"
           chmod +x "$APP/$EXEC"
+          ls -lh "$APP/$EXEC"
           rm -rf Payload
           mkdir Payload
           cp -R "$APP" Payload/
-          zip -r BookReaderTTS-unsigned.ipa Payload
+          zip -r BookReaderTTS-unsigned.ipa Payload -x "*.DS_Store"
           ls -lh *.ipa
       - uses: actions/upload-artifact@v4
         with:
