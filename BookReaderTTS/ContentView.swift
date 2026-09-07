@@ -154,7 +154,7 @@ struct ContentView: View {
     
     func playCurrent(){
         if chapters.isEmpty {
-            tts.speak(text, title: fileName, chapter: "전체")
+            tts.speakFull(text, title: fileName)
         } else {
             tts.speakChapter(at: currentChapterIdx, chapters: chapters, fullText: text, fileName: fileName)
         }
