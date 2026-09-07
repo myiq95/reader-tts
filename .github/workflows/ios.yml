@@ -1,5 +1,5 @@
 
-name: Build IPA for SideStore
+name: Build IPA
 on:
   push:
     branches: [ main ]
@@ -11,28 +11,19 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
-      - name: Install xcodegen
-        run: brew install xcodegen
-      - name: Clean duplicates
-        run: rm -f BookReaderTTS/*_1.swift BookReaderTTS/*-With* BookReaderTTS/TTSManager-GlobalOffset.swift BookReaderTTS/ContentView-With* BookReaderTTS/ContentView-Fixed* BookReaderTTS/ContentView-Final* && ls -lh BookReaderTTS/
-      - name: Generate Project
-        run: |
-          xcodegen generate --spec project.yml
-          sed -i '' 's/objectVersion = 77/objectVersion = 56/g' BookReaderTTS.xcodeproj/project.pbxproj
-      - name: Build .app
-        run: |
+      - run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project.yml
+      - run: |
           mkdir -p build
-          xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -skipPackagePluginValidation
-      - name: Create IPA
-        run: |
+          xcodebuild -project BookReaderTTS.xcodeproj -scheme BookReaderTTS -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - run: |
           APP=build/DerivedData/Build/Products/Release-iphoneos/BookReaderTTS.app
           rm -rf $APP/_CodeSignature
           chmod +x $APP/BookReaderTTS
           rm -rf Payload; mkdir Payload; cp -R $APP Payload/
-          zip -r BookReaderTTS-4.3-fixed.ipa Payload
+          zip -r BookReaderTTS-4.3.2-IconFixed-Minimal.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
           name: BookReaderTTS-IPA
-          path: BookReaderTTS-4.3-fixed.ipa
+          path: BookReaderTTS-4.3.2-IconFixed-Minimal.ipa
