@@ -8,47 +8,78 @@ struct BookParser {
             raw = data.dropFirst(3) as Data
         }
         
-        // 1. UTF-8이 한글이면 바로 성공
-        if let str = String(data: raw, encoding: .utf8) {
-            let k = koreanCount(str)
-            if k > 10 { return str }
-            // 한글이 없는데 유럽문자(¾, Æ, À, ³ 등)가 많으면 CP949가 깨진 것 -> CP949로 재시도
-            if str.contains("¾") || str.contains("À") || str.contains("Æ") || str.contains("³") || str.contains("¼") {
-                // fall through to CP949
-            } else if !str.contains("¿") && !str.contains("´") {
-                // 정상 UTF-8일 수도 있음
-                return str
+        // 모든 인코딩 후보 시도해서 한글이 가장 많이 나오는 것을 선택
+        var bestString: String = ""
+        var bestKoreanScore = -1
+        
+        // 후보 인코딩들 (CP949를 가장 먼저!)
+        let cfKorean: [CFStringEncoding] = [0x0422, 0x0840] // CP949, EUC-KR
+        var candidates: [String.Encoding] = []
+        
+        // CP949, EUC-KR 먼저 추가
+        for cf in cfKorean {
+            let ns = CFStringConvertEncodingToNSStringEncoding(cf)
+            candidates.append(String.Encoding(rawValue: ns))
+        }
+        // 그 다음 rawValue들
+        candidates.append(contentsOf: [
+            String.Encoding(rawValue: 0x80000422),
+            String.Encoding(rawValue: 0x80000840),
+            .utf8,
+            .utf16,
+            .utf16BigEndian,
+            .utf16LittleEndian
+        ])
+        
+        for enc in candidates {
+            if let str = String(data: raw, encoding: enc) {
+                let score = koreanScore(str)
+                // 깨진 유럽문자(¾, Æ, ³)나 다이아몬드(�)가 많으면 감점
+                let brokenPenalty = brokenScore(str)
+                let finalScore = score - brokenPenalty
+                if finalScore > bestKoreanScore {
+                    bestKoreanScore = finalScore
+                    bestString = str
+                }
+                // 한글이 50개 이상이면 바로 성공
+                if score > 50 && brokenPenalty == 0 {
+                    print("Best encoding found: \(enc.rawValue) with score \(score)")
+                    return str
+                }
             }
         }
         
-        // 2. CP949 강제 - 네메아의 사자.txt 같은 경우
-        let cfEnc: CFStringEncoding = 0x0422 // DOSKorean = CP949
-        let nsEnc = CFStringConvertEncodingToNSStringEncoding(cfEnc)
-        let cp949 = String.Encoding(rawValue: nsEnc)
-        if let str = String(data: raw, encoding: cp949) {
-            if koreanCount(str) > 5 {
-                print("Parsed as CP949 - Korean count \(koreanCount(str))")
-                return str
+        // 자동 감지도 시도
+        var used: String.Encoding = .utf8
+        if let auto = try? String(contentsOf: url, usedEncoding: &used) {
+            if koreanScore(auto) > bestKoreanScore {
+                return auto
             }
         }
         
-        // 3. 다른 한글 인코딩들
-        let others: [UInt] = [0x80000840, 0x80000430, 0x80000632]
-        for rv in others {
-            if let str = String(data: raw, encoding: String.Encoding(rawValue: rv)) {
-                if koreanCount(str) > 5 { return str }
-            }
+        if !bestString.isEmpty {
+            return bestString
         }
         
-        // 4. UTF-16
-        if let str = String(data: raw, encoding: .utf16) { return str }
-        if let str = String(data: raw, encoding: .utf16BigEndian) { return str }
-        
-        // 5. 최후 fallback - UTF8로 강제 디코딩
+        // 최후
         return String(decoding: raw, as: UTF8.self)
     }
     
-    static func koreanCount(_ s: String) -> Int {
+    static func koreanScore(_ s: String) -> Int {
         s.unicodeScalars.filter { (0xAC00...0xD7A3).contains($0.value) }.count
+    }
+    
+    static func brokenScore(_ s: String) -> Int {
+        // 유럽 깨짐 문자, 다이아몬드 물음표, 중국어 한자가 많으면 깨진 것
+        var penalty = 0
+        penalty += s.filter { $0 == "�" }.count * 10
+        penalty += s.filter { ["¾","Æ","³","¼","Å","Ç","À","¿"].contains(String($0)) }.count * 2
+        // 한자는 있어도 괜찮지만 한글보다 3배 많으면 깨진 것
+        let chinese = s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
+        let korean = koreanScore(s)
+        if chinese > korean * 2 && chinese > 20 {
+            penalty += chinese
+        }
+        return penalty
     }
 }
