@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 struct BookParser {
     static func parse(url: URL) -> String {
@@ -8,78 +9,61 @@ struct BookParser {
             raw = data.dropFirst(3) as Data
         }
         
-        // 모든 인코딩 후보 시도해서 한글이 가장 많이 나오는 것을 선택
-        var bestString: String = ""
-        var bestKoreanScore = -1
-        
-        // 후보 인코딩들 (CP949를 가장 먼저!)
-        let cfKorean: [CFStringEncoding] = [0x0422, 0x0840] // CP949, EUC-KR
-        var candidates: [String.Encoding] = []
-        
-        // CP949, EUC-KR 먼저 추가
-        for cf in cfKorean {
-            let ns = CFStringConvertEncodingToNSStringEncoding(cf)
-            candidates.append(String.Encoding(rawValue: ns))
-        }
-        // 그 다음 rawValue들
-        candidates.append(contentsOf: [
-            String.Encoding(rawValue: 0x80000422),
-            String.Encoding(rawValue: 0x80000840),
-            .utf8,
-            .utf16,
-            .utf16BigEndian,
-            .utf16LittleEndian
-        ])
-        
-        for enc in candidates {
-            if let str = String(data: raw, encoding: enc) {
-                let score = koreanScore(str)
-                // 깨진 유럽문자(¾, Æ, ³)나 다이아몬드(�)가 많으면 감점
-                let brokenPenalty = brokenScore(str)
-                let finalScore = score - brokenPenalty
-                if finalScore > bestKoreanScore {
-                    bestKoreanScore = finalScore
-                    bestString = str
-                }
-                // 한글이 50개 이상이면 바로 성공
-                if score > 50 && brokenPenalty == 0 {
-                    print("Best encoding found: \(enc.rawValue) with score \(score)")
-                    return str
-                }
-            }
-        }
-        
-        // 자동 감지도 시도
+        // 0. 자동 감지 - iOS가 제일 잘함
         var used: String.Encoding = .utf8
         if let auto = try? String(contentsOf: url, usedEncoding: &used) {
-            if koreanScore(auto) > bestKoreanScore {
+            if koreanScore(auto) > 5 {
+                print("Auto OK \(used.rawValue) score \(koreanScore(auto))")
                 return auto
             }
         }
         
-        if !bestString.isEmpty {
-            return bestString
+        // 1. CP949 / EUC-KR 강제 - CoreFoundation로 직접 (String(data:encoding:)보다 강력)
+        if let s = decodeWithCF(data: raw, cfEncoding: 0x0422) { // CP949
+            if koreanScore(s) > 0 { print("CF CP949 success"); return s }
+        }
+        if let s = decodeWithCF(data: raw, cfEncoding: 0x0840) { // EUC-KR
+            if koreanScore(s) > 0 { return s }
         }
         
-        // 최후
-        return String(decoding: raw, as: UTF8.self)
+        // 2. NSString rawValue로
+        let encodings: [UInt] = [0x80000422, 0x80000840, 0x80000430, 0x80000632]
+        for rv in encodings {
+            let enc = String.Encoding(rawValue: rv)
+            if let s = String(data: raw, encoding: enc), koreanScore(s) > 0 {
+                print("RawValue \(rv) success")
+                return s
+            }
+        }
+        
+        // 3. UTF-8, UTF-16
+        if let s = String(data: raw, encoding: .utf8), koreanScore(s) > 0 || !s.contains("�") {
+            return s
+        }
+        if let s = String(data: raw, encoding: .utf16) { return s }
+        if let s = String(data: raw, encoding: .utf16BigEndian) { return s }
+        
+        // 4. 최후: CP949로 lossy하게라도 읽기 (� 안 나오게)
+        // CF로 non-lossy false로 시도
+        return decodeWithCF(data: raw, cfEncoding: 0x0422, lossy: true) ?? String(decoding: raw, as: UTF8.self)
+    }
+    
+    static func decodeWithCF(data: Data, cfEncoding: CFStringEncoding, lossy: Bool = false) -> String? {
+        let nsEnc = CFStringConvertEncodingToNSStringEncoding(cfEncoding)
+        // CFStringCreateWithBytes는 String(data:encoding:)보다 관대함
+        var bytes = [UInt8](data)
+        let cfStr = CFStringCreateWithBytes(nil, &bytes, data.count, cfEncoding, false)
+        if let cfStr = cfStr {
+            return cfStr as String
+        }
+        // 실패하면 NSString 방식으로 재시도
+        if let s = String(data: data, encoding: String.Encoding(rawValue: nsEnc)) {
+            return s
+        }
+        return nil
     }
     
     static func koreanScore(_ s: String) -> Int {
         s.unicodeScalars.filter { (0xAC00...0xD7A3).contains($0.value) }.count
-    }
-    
-    static func brokenScore(_ s: String) -> Int {
-        // 유럽 깨짐 문자, 다이아몬드 물음표, 중국어 한자가 많으면 깨진 것
-        var penalty = 0
-        penalty += s.filter { $0 == "�" }.count * 10
-        penalty += s.filter { ["¾","Æ","³","¼","Å","Ç","À","¿"].contains(String($0)) }.count * 2
-        // 한자는 있어도 괜찮지만 한글보다 3배 많으면 깨진 것
-        let chinese = s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
-        let korean = koreanScore(s)
-        if chinese > korean * 2 && chinese > 20 {
-            penalty += chinese
-        }
-        return penalty
     }
 }
