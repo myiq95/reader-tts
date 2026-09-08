@@ -168,7 +168,7 @@ struct ContentView: View {
                     Text("\(currentChapterIdx+1)/\(chapters.count)").font(.caption2.bold()).padding(.horizontal,8).padding(.vertical,4).background(Color(.systemGray5)).clipShape(Capsule())
                     Text(chapters[currentChapterIdx].title).font(.caption).lineLimit(1).foregroundColor(.secondary)
                     Spacer()
-                    Text("\(currentPageStart/ pageSize + 1)페이지").font(.caption2).foregroundColor(.secondary)
+                    Text("\(currentPageStart / pageSize + 1)페이지").font(.caption2).foregroundColor(.secondary)
                     Button(action:{ autoScroll.toggle() }){
                         HStack(spacing:4){
                             Image(systemName: autoScroll ? "book.pages.fill" : "book.pages")
