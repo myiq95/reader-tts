@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>BookReaderTTS</string>
+<key>CFBundleDisplayName</key><string>책 뷰어</string>
+<key>CFBundleIdentifier</key><string>com.bookreader.tts</string>
+<key>CFBundleExecutable</key><string>BookReaderTTS</string>
+<key>CFBundleVersion</key><string>8</string>
+<key>CFBundleShortVersionString</key><string>4.3.2</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>LSRequiresIPhoneOS</key><true/>
+<key>UILaunchStoryboardName</key><string>LaunchScreen</string>
+<key>UIBackgroundModes</key><array><string>audio</string></array>
+<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+</dict></plist>
