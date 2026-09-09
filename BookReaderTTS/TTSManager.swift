@@ -1,4 +1,3 @@
-
 import AVFoundation
 import MediaPlayer
 
@@ -12,6 +11,7 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     var fullText = ""
     var currentChapterIndex = 0
     private var chunkBaseOffset = 0
+    private let skipSet = ".,=?'\"!;:-_()[]{}<> /\\|@#$%^&*`~+"
 
     override init() {
         super.init()
@@ -37,11 +37,19 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
             MPNowPlayingInfoPropertyPlaybackRate: isSpeaking ? 1.0 : 0.0
         ]
     }
+    func cleanForTTS(_ input: String) -> String {
+        var result = ""
+        for ch in input {
+            if skipSet.contains(ch) { result.append(" ") } else { result.append(ch) }
+        }
+        return result
+    }
     func speakFull(_ full: String, title: String){
         fullText = full
         chunkBaseOffset = 0
         synth.stopSpeaking(at: .immediate)
-        let u = AVSpeechUtterance(string: full)
+        let cleaned = cleanForTTS(full)
+        let u = AVSpeechUtterance(string: cleaned)
         u.voice = AVSpeechSynthesisVoice(language: voiceLang) ?? AVSpeechSynthesisVoice(language: "ko-KR")
         u.rate = rate
         u.pitchMultiplier = 1.05
@@ -59,14 +67,13 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         let safeStart = max(0, min(startLine, lines.count-1))
         let safeEnd = max(safeStart, min(endLine, lines.count))
         var accumulated = 0
-        for i in 0..<safeStart {
-            accumulated += (lines[i] as NSString).length + 1
-        }
+        for i in 0..<safeStart { accumulated += (lines[i] as NSString).length + 1 }
         chunkBaseOffset = accumulated
         let chunkLines = lines[safeStart..<safeEnd].joined(separator: "\n")
         let chunk = chunkLines.isEmpty ? fullText : chunkLines
         synth.stopSpeaking(at: .immediate)
-        let u = AVSpeechUtterance(string: chunk)
+        let cleaned = cleanForTTS(chunk)
+        let u = AVSpeechUtterance(string: cleaned)
         u.voice = AVSpeechSynthesisVoice(language: voiceLang) ?? AVSpeechSynthesisVoice(language: "ko-KR")
         u.rate = rate
         u.pitchMultiplier = 1.05
@@ -79,7 +86,6 @@ class TTSManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     func stop(){ synth.stopSpeaking(at: .immediate); isSpeaking = false; currentRange = nil }
     func nextChapter(){ NotificationCenter.default.post(name: .nextChapter, object: nil) }
     func prevChapter(){ NotificationCenter.default.post(name: .prevChapter, object: nil) }
-    
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString range: NSRange, utterance: AVSpeechUtterance){
         DispatchQueue.main.async {
             let global = NSRange(location: self.chunkBaseOffset + range.location, length: range.length)
